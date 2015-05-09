@@ -49,7 +49,7 @@ public class Kmeans {
 		job.setJarByClass(Kmeans.class);
 		job.setJobName("KmeansZachLiu");
 		// Setup MapReduce
-		//job.setCombinerClass(MyCombiner.class);
+		// job.setCombinerClass(MyCombiner.class);
 		job.setMapperClass(MyMapper.class);
 		job.setNumReduceTasks(1);
 		// job.setReducerClass(MyReducer.class);
@@ -216,21 +216,7 @@ public class Kmeans {
 
 	}
 
-	/*
-	 * public static class MyCombiner extends Reducer<Text, Text, Text, Text> {
-	 * public void reduce(Text text, Iterable<Text> values, Context context)
-	 * throws IOException, InterruptedException { int count = 0; Double[]
-	 * avgResult = new Double[text.toString().split(",").length]; for (Text
-	 * value : values) { count++; String temp = value.toString(); Centroid tempc
-	 * = new Centroid(temp); for (int i = 0; i < avgResult.length; i++) {
-	 * avgResult[i] += tempc.corr[i]; } } for (int i = 0; i < avgResult.length;
-	 * i++) { avgResult[i] /= count; }
-	 * 
-	 * context.write(new Text(StringUtils.join(avgResult, ",")), new Text()); }
-	 * }
-	 */
-
-	public static class MyReducer extends Reducer<Text, Text, Text, Text> {
+	public static class MyCombiner extends Reducer<Text, Text, Text, Text> {
 		public void reduce(Text text, Iterable<Text> values, Context context)
 				throws IOException, InterruptedException {
 			int count = 0;
@@ -245,6 +231,29 @@ public class Kmeans {
 			}
 			for (int i = 0; i < avgResult.length; i++) {
 				avgResult[i] /= count;
+			}
+			context.write(text, new Text(StringUtils.join(avgResult, ",") + " "
+					+ count));
+		}
+	}
+
+	public static class MyReducer extends Reducer<Text, Text, Text, Text> {
+		public void reduce(Text text, Iterable<Text> values, Context context)
+				throws IOException, InterruptedException {
+			int totalCount = 0;
+			Double[] avgResult = new Double[text.toString().split(",").length];
+			for (Text value : values) {
+				String temp = value.toString();
+				String[] temp2 = temp.split(" ");
+				int tempCount = Integer.parseInt(temp2[1]);
+				totalCount += tempCount;
+				Centroid tempc = new Centroid(temp2[0]);
+				for (int i = 0; i < avgResult.length; i++) {
+					avgResult[i] += tempc.corr[i] * tempCount;
+				}
+			}
+			for (int i = 0; i < avgResult.length; i++) {
+				avgResult[i] /= totalCount;
 			}
 
 			context.write(new Text(StringUtils.join(avgResult, ",")),
