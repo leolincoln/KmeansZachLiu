@@ -6,12 +6,15 @@ import java.io.DataOutput;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
@@ -33,22 +36,23 @@ public class Kmeans {
 			InterruptedException, ClassNotFoundException {
 		Path inputPath = new Path(args[0]);
 		Path outputDir = new Path(args[1]);
-		String fileName1 = "/huser54/hadoopJobs/hw3/old_centroids.txt";
+		String fileName1 = "clusterCentroids/old_centroids.txt";
 		// String fileName2 = "/huser54/hadoopJobs/hw3/new_centroids.txt";
 
 		// Create configuration
 		Configuration conf = new Configuration(true);
-
 		// Create job
-		Job job = Job.getInstance(conf);
-		// Job job = new Job(conf, "MaxTemperature");
+		// Job job = Job.getInstance(conf);
+		Job job = new Job(conf, "Kmeans");
+		DistributedCache.addCacheFile(new Path(fileName1).toUri(),
+				job.getConfiguration());
 		job.setJarByClass(Kmeans.class);
 		job.setJobName("KmeansZachLiu");
 		// Setup MapReduce
-		// job.setCombinerClass(MyCombiner.class);
+		job.setCombinerClass(MyCombiner.class);
 		job.setMapperClass(MyMapper.class);
 		job.setNumReduceTasks(1);
-		// job.setReducerClass(MyReducer.class);
+		job.setReducerClass(MyReducer.class);
 		// job.setNumReduceTasks(1);
 
 		// Specify key / value
@@ -62,8 +66,11 @@ public class Kmeans {
 		// Output
 		FileOutputFormat.setOutputPath(job, outputDir);
 		job.setOutputFormatClass(TextOutputFormat.class);
-
-		job.addCacheFile(new Path(fileName1).toUri());
+		/*
+		 * try { job.addCacheFile(new URI(fileName1)); } catch
+		 * (URISyntaxException e) { // TODO Auto-generated catch block
+		 * e.printStackTrace(); }
+		 */
 		// job.addCacheFile(new Path(fileName2).toUri());
 
 		// Delete output if exists
@@ -82,24 +89,28 @@ public class Kmeans {
 		 * 
 		 */
 		private static final long serialVersionUID = 3998692641498513263L;
-		double[] corr;
+		Double[] corr;
 		String corrString;
 
 		public Centroid(String input) {
-			String[] inputcorr = input.split(",");
-			corr = new double[inputcorr.length];
+
+			String[] inputcorr = input.trim().split("\\s+");
+			corr = new Double[inputcorr.length];
+			// System.out.println(input.trim());
 			for (int i = 0; i < inputcorr.length; i++) {
+
 				corr[i] = Double.parseDouble(inputcorr[i]);
+
 			}
-			this.corrString = input;
+			this.corrString = input.trim();
 		}
 
 		public Centroid(Double[] input) {
-			this(StringUtils.join(input, ","));
+			this(StringUtils.join(input, " "));
 		}
 
 		public Centroid(String[] input) {
-			this(StringUtils.join(input, ","));
+			this(StringUtils.join(input, " "));
 		}
 
 		public String toString() {
@@ -137,6 +148,32 @@ public class Kmeans {
 	}
 
 	public static class MyMapper extends Mapper<Object, Text, Text, Text> {
+		ArrayList<Centroid> centroids = new ArrayList<Centroid>();
+
+		public void setup(Context context) throws IOException,
+				InterruptedException {
+
+			Configuration conf = context.getConfiguration();
+			FileSystem fs = FileSystem.getLocal(conf);
+
+			Path[] dataFile = DistributedCache.getLocalCacheFiles(conf);
+
+			// [0] because we added just one file.
+			BufferedReader reader = new BufferedReader(new InputStreamReader(
+					fs.open(dataFile[0])));
+			// now one can use BufferedReader's readLine() to read data
+			String line = null;
+			while ((line = reader.readLine()) != null) {
+				try {
+					centroids.add(new Centroid(line));
+				} catch (Exception e) {
+					System.out.println("ERROR: ");
+					System.out.println(line);
+				}
+			}
+
+			reader.close();
+		}
 
 		// private final IntWritable ONE = new IntWritable(1);
 		/**
@@ -187,27 +224,30 @@ public class Kmeans {
 
 		public void map(Object key, Text value, Context context)
 				throws IOException, InterruptedException {
-			URI[] localPaths = context.getCacheFiles();
-			// centroids is the list holding all old centroids.
-			ArrayList<Centroid> centroids = new ArrayList<Centroid>();
-			for (URI uri : localPaths) {
-				File usersFile = new File(uri);
-				BufferedReader reader = null;
-				reader = new BufferedReader(new FileReader(usersFile));
-				String line = null;
-				while ((line = reader.readLine()) != null) {
-					centroids.add(new Centroid(line));
-				}
-
-				reader.close();
-			}
+			/*
+			 * URI[] localPaths = context.getCacheFiles(); // centroids is the
+			 * list holding all old centroids.
+			 * 
+			 * for (URI uri : localPaths) { File usersFile = new File(uri);
+			 * BufferedReader reader = null; reader = new BufferedReader(new
+			 * FileReader(usersFile)); String line = null; while ((line =
+			 * reader.readLine()) != null) { centroids.add(new Centroid(line));
+			 * }
+			 * 
+			 * reader.close(); }
+			 */
 
 			// check if the last column is false.
-			String[] data = value.toString().split("\\s+");
-			Centroid inputData = new Centroid(data);
-			Centroid nearest = nearestCentroid(centroids, inputData);
-			context.write(new Text(nearest.toString()),
-					new Text(inputData.toString()));
+			String[] data = value.toString().trim().split("\\s+");
+			try {
+				Centroid inputData = new Centroid(data);
+				Centroid nearest = nearestCentroid(centroids, inputData);
+				context.write(new Text(nearest.toString()),
+						new Text(inputData.toString()));
+			} catch (Exception e) {
+				System.out.println("ERROR: in map()");
+				System.out.println(value.toString());
+			}
 		}
 
 	}
@@ -216,19 +256,28 @@ public class Kmeans {
 		public void reduce(Text text, Iterable<Text> values, Context context)
 				throws IOException, InterruptedException {
 			int count = 0;
-			Double[] avgResult = new Double[text.toString().split(",").length];
+			Double[] avgResult = new Double[text.toString().trim()
+					.split("\\s+").length];
+			for (int i = 0; i < avgResult.length; i++) {
+				avgResult[i] = 0.0;
+			}
 			for (Text value : values) {
-				count++;
-				String temp = value.toString();
-				Centroid tempc = new Centroid(temp);
-				for (int i = 0; i < avgResult.length; i++) {
-					avgResult[i] += tempc.corr[i];
+				try {
+					count++;
+					String temp = value.toString().trim();
+					Centroid tempc = new Centroid(temp);
+					for (int i = 0; i < avgResult.length; i++) {
+						avgResult[i] = new Double(avgResult[i] + tempc.corr[i]);
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+					System.exit(1);
 				}
 			}
 			for (int i = 0; i < avgResult.length; i++) {
 				avgResult[i] /= count;
 			}
-			context.write(text, new Text(StringUtils.join(avgResult, ",") + " "
+			context.write(text, new Text(StringUtils.join(avgResult, " ") + ";"
 					+ count));
 		}
 	}
@@ -237,10 +286,13 @@ public class Kmeans {
 		public void reduce(Text text, Iterable<Text> values, Context context)
 				throws IOException, InterruptedException {
 			int totalCount = 0;
-			Double[] avgResult = new Double[text.toString().split(",").length];
+			Double[] avgResult = new Double[text.toString().split("\\s+").length];
+			for (int i = 0; i < avgResult.length; i++) {
+				avgResult[i] = 0.0;
+			}
 			for (Text value : values) {
 				String temp = value.toString();
-				String[] temp2 = temp.split(" ");
+				String[] temp2 = temp.split(";");
 				int tempCount = Integer.parseInt(temp2[1]);
 				totalCount += tempCount;
 				Centroid tempc = new Centroid(temp2[0]);
@@ -252,7 +304,7 @@ public class Kmeans {
 				avgResult[i] /= totalCount;
 			}
 
-			context.write(new Text(StringUtils.join(avgResult, ",")),
+			context.write(new Text(StringUtils.join(avgResult, " ")),
 					new Text());
 		}
 	}
