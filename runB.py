@@ -5,9 +5,9 @@ inputFileName is requested to be correct
 Other fields does not really matter as they can regenerate themselves
 
 '''
-inputFileName="C.txt"
-inputPath="C/"
-outputPath="Cout/"
+inputFileName="B.txt"
+inputPath="B/"
+outputPath="Bout/"
 threshold = 1.0
 
 #dont change the centroidPath 

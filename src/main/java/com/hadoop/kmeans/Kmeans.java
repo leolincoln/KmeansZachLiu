@@ -75,6 +75,7 @@ public class Kmeans {
 
 		// Delete output if exists
 		FileSystem hdfs = FileSystem.get(conf);
+		
 		if (hdfs.exists(outputDir))
 			hdfs.delete(outputDir, true);
 
@@ -98,9 +99,7 @@ public class Kmeans {
 			corr = new Double[inputcorr.length];
 			// System.out.println(input.trim());
 			for (int i = 0; i < inputcorr.length; i++) {
-
 				corr[i] = Double.parseDouble(inputcorr[i]);
-
 			}
 			this.corrString = input.trim();
 		}
@@ -165,7 +164,7 @@ public class Kmeans {
 			String line = null;
 			while ((line = reader.readLine()) != null) {
 				try {
-					centroids.add(new Centroid(line));
+					centroids.add(new Centroid(line.split(";")[0]));
 				} catch (Exception e) {
 					System.out.println("ERROR: ");
 					System.out.println(line);
@@ -224,19 +223,6 @@ public class Kmeans {
 
 		public void map(Object key, Text value, Context context)
 				throws IOException, InterruptedException {
-			/*
-			 * URI[] localPaths = context.getCacheFiles(); // centroids is the
-			 * list holding all old centroids.
-			 * 
-			 * for (URI uri : localPaths) { File usersFile = new File(uri);
-			 * BufferedReader reader = null; reader = new BufferedReader(new
-			 * FileReader(usersFile)); String line = null; while ((line =
-			 * reader.readLine()) != null) { centroids.add(new Centroid(line));
-			 * }
-			 * 
-			 * reader.close(); }
-			 */
-
 			// check if the last column is false.
 			String[] data = value.toString().trim().split("\\s+");
 			try {
@@ -271,7 +257,7 @@ public class Kmeans {
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
-					System.exit(1);
+					context.write(text, value);
 				}
 			}
 			for (int i = 0; i < avgResult.length; i++) {
@@ -305,7 +291,7 @@ public class Kmeans {
 			}
 
 			context.write(new Text(StringUtils.join(avgResult, " ")),
-					new Text());
+					new Text(";"+totalCount));
 		}
 	}
 
