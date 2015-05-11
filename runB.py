@@ -8,7 +8,7 @@ Other fields does not really matter as they can regenerate themselves
 inputFileName="B.txt"
 inputPath="B/"
 outputPath="Bout/"
-threshold = 1.0
+threshold = 0.0001
 
 #dont change the centroidPath 
 centroidPath='clusterCentroids/'
